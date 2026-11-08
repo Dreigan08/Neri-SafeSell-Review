@@ -1,6 +1,6 @@
-# Neri SafeSell — Experimental Review
+# Neri SafeSell — Staff Review
 
-This repository contains an **unobfuscated SafeSell userscript build submitted for Torn staff review**.
+This repository contains the **unobfuscated SafeSell userscript source submitted for Torn staff review**.
 
 ## Build
 
@@ -16,7 +16,7 @@ SHA-256 of the reviewed source:
 
 SafeSell is a desktop userscript intended to reduce the time a player keeps cash exposed after receiving money.
 
-This review build:
+It:
 
 - monitors wallet changes through Torn's loaded web interface (DOM);
 - can also use Torn's official `user/money` API as a backup source;
@@ -26,27 +26,19 @@ This review build:
 - supports Property Vault and Cayman deposit interfaces;
 - coordinates API polling between multiple tabs and includes its own API rate guard.
 
-## Important: deposit remains manual
+The actual deposit action remains manual.
 
-**This review build does not automatically submit a deposit.**
+## Review question
 
-There is no one-shot deposit behavior in this version. SafeSell may navigate to the Property Vault and autofill the amount, but the player must manually click **DEPOSIT**.
+The behavior I would like clarification on is **DOM monitoring while Torn remains loaded but is not the actively focused tab/window**.
 
-The build contains no synthetic deposit click, `submit()`, `requestSubmit()`, or one-shot `sessionStorage` flow.
+In that state, SafeSell's DOM observers can continue detecting wallet changes from Torn's already-loaded interface. The official Torn API may also continue polling independently.
 
-## Behavior submitted for clarification
+This DOM monitoring does not itself submit game actions or generate additional non-API requests.
 
-The specific behavior I would like staff to review is **background DOM monitoring**.
+My question is:
 
-In this Experimental Review build, if Torn remains loaded but the tab/window is not actively focused, SafeSell's DOM observers remain active and may detect wallet changes from Torn's already-loaded interface. The official Torn API can also continue polling independently.
-
-No game action is performed automatically as a result of those observations.
-
-My main question is:
-
-> Is observing changes in an already-loaded Torn page's DOM while the page is in the background acceptable under the scripting rules, provided the script does not submit actions or generate additional non-API requests from that DOM monitoring?
-
-If that behavior is not permitted, SafeSell already has a more conservative public design where DOM monitoring stops outside the active/focused Torn page and background monitoring is API-only.
+> Is observing changes in the DOM of an already-loaded Torn page while that page is in the background acceptable under Torn's scripting rules, when the observations are used only for wallet monitoring/alerts and do not submit game actions or generate additional non-API requests?
 
 ## Security / privacy
 
@@ -61,4 +53,4 @@ If that behavior is not permitted, SafeSell already has a more conservative publ
 
 ## Review note
 
-This repository exists specifically so Torn staff can inspect the exact source corresponding to the hash above. If code changes are requested, they will be published as a new version rather than silently replacing the reviewed build.
+This repository exists so Torn staff can inspect the exact source corresponding to the hash above. If code changes are requested, they will be published as a new version rather than silently replacing the reviewed build.
