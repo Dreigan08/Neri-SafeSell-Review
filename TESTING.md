@@ -91,3 +91,10 @@ This checklist documents the main behaviors that should remain stable across rel
 - During Torn's initial rendering window, the waiting panel should re-check approximately every 80 ms.
 - After 2.5 seconds of unresolved rendering, checks may slow to approximately 250 ms.
 - Confirm the transient probe stops once the deposit context is found or after leaving the deposit route.
+
+
+## Property Vault fast-form capacity regression
+- Enter Property Vault after the fast deposit-form detector resolves the DEPOSIT control.
+- Confirm wallet/stored text can live outside the immediate form subtree.
+- Confirm remaining capacity is still `$1,000,000,000 - stored cash`.
+- Example: stored `$39,369,856` must display `$960,630,144 left`.
