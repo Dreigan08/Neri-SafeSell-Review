@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.6] — 2026-11-08
+
+### Changed
+- Added adaptive alarm volume based on total exposed wallet cash.
+- Below $100,000 the visual notification remains but the alarm sound is suppressed.
+- From $100,000 to $1,000,000 the alarm volume rises progressively.
+- At $1,000,000 or above the original full alarm volume is preserved.
+- Added a cheap fast-path for Property Vault/Cayman deposit-form detection.
+- Expensive text-based context scans remain throttled while exact DEPOSIT-button detection can react immediately.
+- Added a temporary deposit-page probe (~80 ms during the first 2.5 seconds, then ~250 ms) so the panel leaves its waiting state promptly when Torn finishes rendering.
+- Final DEPOSIT remains manual in the Review build.
+
 ## [1.0.5] — 2026-11-08
 
 ### Changed
