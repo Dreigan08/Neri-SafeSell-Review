@@ -1,6 +1,6 @@
 # Neri SafeSell — Staff Review
 
-This repository contains the **unobfuscated SafeSell userscript source submitted for Torn staff review**.
+This repository contains the **SafeSell userscript source submitted for Torn staff review**.
 
 ## Build
 
@@ -33,7 +33,6 @@ It:
 - Network requests are limited to `api.torn.com`.
 - The intended API permission is `user/money` only.
 - API keys are stored locally through the userscript manager's GM storage.
-- Source is intentionally unobfuscated.
 - Mobile browsers and Torn PDA are blocked before initialization.
 - Supported desktop userscript managers are Tampermonkey and Violentmonkey.
 
