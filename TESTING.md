@@ -4,7 +4,7 @@ This checklist documents the main behaviors that should remain stable across rel
 
 ## DOM-only operation
 - Arm SafeSell with no API key configured.
-- Confirm no API polling, leader heartbeat, or rate-bucket activity starts.
+- Confirm no API polling or rate-bucket activity starts. Shared state-owner coordination may remain active.
 - Verify a wallet increase in Torn's DOM produces one alert.
 - Verify $0 is accepted as a valid baseline.
 - Verify SAFE OFF clears pending state and the shared snapshot.
@@ -18,6 +18,10 @@ This checklist documents the main behaviors that should remain stable across rel
 - Verify Cayman is treated separately from the Property Vault fixed-cap model.
 
 ## Multi-tab coordination
+- Open two or more Torn tabs with **no API key** and confirm only one tab owns wallet transitions/alerts.
+- Trigger one wallet increase visible to multiple tabs and confirm only one alert is emitted.
+- Regression case: simulate a scheduled/company payment while multiple Torn windows are open; confirm no repeating alarm loop occurs.
+- Switch focus between tabs and confirm the most recently focused tab becomes the preferred shared-state owner.
 - Open two or more Torn tabs with an API key configured.
 - Confirm the most recently focused Torn tab becomes the preferred API leader.
 - Confirm follower tabs do not poll the API.
@@ -25,6 +29,9 @@ This checklist documents the main behaviors that should remain stable across rel
 - Close the leader tab and verify another tab can take over after the lease becomes stale.
 
 ## API fallback and failures
+- Start an API request, then change API key / lose leadership before the callback returns; confirm the stale callback cannot alter current API health or wallet state.
+- Trigger a 429/backoff in one tab, transfer ownership to another tab, and confirm the new owner respects the same shared cooldown.
+- Trigger invalid-key suspension in one tab and confirm another tab cannot immediately resume API polling with the same key revision.
 - Confirm foreground DOM keeps priority over the API.
 - Move Torn to the background and verify the API can act as backup when configured.
 - Test invalid or insufficient API credentials: API backup should suspend rather than retry indefinitely.
@@ -32,6 +39,7 @@ This checklist documents the main behaviors that should remain stable across rel
 - Test malformed or incomplete responses: wallet state must not be modified.
 
 ## Alert deduplication
+- Alert once for 100k → 150k, disarm, return wallet to 100k while SafeSell is off, re-arm, then receive another 50k; confirm the second 100k → 150k transition alerts again.
 - Confirm one wallet transition is not alerted twice across DOM / multi-tab synchronization.
 - Confirm a wallet decrease advances the wallet cycle.
 - Confirm a later legitimate increase can alert again even if it reaches a previously seen balance.
