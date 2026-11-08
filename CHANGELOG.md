@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.7] — 2026-11-08
+
+### Fixed
+- Fixed Property Vault capacity showing `Unknown` after the 1.0.6 fast deposit-form detector returned a smaller form subtree.
+- Wallet and stored-vault facts are now read from nearby Vault ancestors first, then from deposit-page text only as a fallback.
+- Preserved the faster Vault/Cayman loading path and adaptive alarm behavior from 1.0.6.
+
 ## [1.0.6] — 2026-11-08
 
 ### Changed
