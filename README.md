@@ -4,13 +4,13 @@ This repository contains the **SafeSell userscript source submitted for Torn sta
 
 ## Current build
 
-**Neri SafeSell v1.0.1 — Review**
+**Neri SafeSell v1.0.2 — Review**
 
-Source: [NeriSafeSell_v1.0.1_Review.user.js](./NeriSafeSell_v1.0.1_Review.user.js)
+Source: [NeriSafeSell_v1.0.2_Review.user.js](./NeriSafeSell_v1.0.2_Review.user.js)
 
 SHA-256 of the current reviewed source:
 
-`c8abefdad443f217d7b307dc13d82aaf9f4be41f5aeb3c91ffd7acf1bbad3574`
+`8a008f44eac99777172cafe18c5fa762673d83ace85382005d2b9d380943920c`
 
 ## What SafeSell does
 
@@ -26,8 +26,8 @@ It:
 - provides a shortcut to the Property Vault;
 - can autofill the deposit field from the current deposit-page wallet value;
 - supports Property Vault and Cayman deposit interfaces;
-- coordinates optional API polling between multiple tabs;
-- applies API rate guarding and bounded backoff on failures.
+- coordinates a single shared-state owner across tabs, with optional API polling on that same owner;
+- applies API rate guarding, shared cross-tab API health, and bounded backoff on failures.
 
 The final **DEPOSIT** action remains manual in this Review build.
 
