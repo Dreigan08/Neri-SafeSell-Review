@@ -26,20 +26,6 @@ It:
 - supports Property Vault and Cayman deposit interfaces;
 - coordinates API polling between multiple tabs and includes its own API rate guard.
 
-The actual deposit action remains manual.
-
-## Review question
-
-The behavior I would like clarification on is **DOM monitoring while Torn remains loaded but is not the actively focused tab/window**.
-
-In that state, SafeSell's DOM observers can continue detecting wallet changes from Torn's already-loaded interface. The official Torn API may also continue polling independently.
-
-This DOM monitoring does not itself submit game actions or generate additional non-API requests.
-
-My question is:
-
-> Is observing changes in the DOM of an already-loaded Torn page while that page is in the background acceptable under Torn's scripting rules, when the observations are used only for wallet monitoring/alerts and do not submit game actions or generate additional non-API requests?
-
 ## Security / privacy
 
 - No analytics or telemetry.
