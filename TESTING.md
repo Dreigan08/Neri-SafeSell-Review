@@ -60,3 +60,19 @@ This checklist documents the main behaviors that should remain stable across rel
 - Torn PDA / Flutter bridge context: blocked.
 - iframe execution: blocked.
 - non-Torn domains: blocked.
+
+
+## Background throttling / ownership lease
+- With two Torn tabs open, focus tab A and confirm A becomes the state owner immediately.
+- Leave A hidden long enough for ordinary browser timer throttling; another hidden tab must not steal ownership merely because A's heartbeat is late.
+- Focus tab B and confirm B takes ownership immediately without waiting for the old lease to expire.
+- Let the owner timer fire late while no other tab has taken ownership; it should renew the same token rather than manufacture a false handoff.
+- Simulate/observe a genuinely abandoned owner and confirm another tab can recover only after the 180-second lease.
+- Freeze/resume a tab where supported and confirm API polling is stopped while frozen and state is reconciled on resume.
+- Repeat the historical multi-window cash-increase scenario: one wallet transition must produce one shared alert and no alarm loop.
+
+## UI / observer performance
+- Confirm only the sidebar wallet observer, Vault observer, and one global structural observer are active.
+- Generate unrelated Torn DOM churn and verify it does not repeatedly rebuild SafeSell UI.
+- Confirm unchanged quick-button and SAFE-switch states do not rewrite their markup.
+- Confirm identical wallet reads do not rewrite the shared snapshot more often than the intended refresh window.
