@@ -13,8 +13,9 @@ This checklist documents the main behaviors that should remain stable across rel
 - Enter the Property Vault with exposed cash.
 - Confirm the amount is derived from the current deposit-page DOM, not a stale cached wallet value.
 - Confirm the final DEPOSIT action remains manual in this Review build.
-- Verify confirmed / estimated / unknown capacity states are reported safely.
-- Repeat on Cayman where applicable.
+- Verify Property Vault remaining capacity equals `$1,000,000,000 - currently stored cash`.
+- If the stored amount cannot be read, verify SafeSell does not autofill a guessed amount.
+- Verify Cayman is treated separately from the Property Vault fixed-cap model.
 
 ## Multi-tab coordination
 - Open two or more Torn tabs with an API key configured.
