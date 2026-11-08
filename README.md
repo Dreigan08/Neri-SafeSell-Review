@@ -2,15 +2,15 @@
 
 This repository contains the **SafeSell userscript source submitted for Torn staff review**.
 
-## Build
+## Current build
 
-**Neri SafeSell v0.9.7 — Experimental Review**
+**Neri SafeSell v1.0.0 — Review**
 
-Source: [NeriSafeSell_v0.9.7_Experimental_Review.user.js](./NeriSafeSell_v0.9.7_Experimental_Review.user.js)
+Source: [NeriSafeSell_v1.0.0_Review.user.js](./NeriSafeSell_v1.0.0_Review.user.js)
 
-SHA-256 of the reviewed source:
+SHA-256 of the current reviewed source:
 
-`5f6c815317122fdd4602954362b0485c29349a8de881de3353d374fd9feb44eb`
+`35945cbcaae817e7f4fb8e7b16a6de7377576b7edd553034b33bb4d2f5187703`
 
 ## What SafeSell does
 
@@ -19,12 +19,17 @@ SafeSell is a desktop userscript intended to reduce the time a player keeps cash
 It:
 
 - monitors wallet changes through Torn's loaded web interface (DOM);
-- can also use Torn's official `user/money` API as a backup source;
+- can optionally use Torn's official `user/money` API as a backup source;
+- treats foreground DOM data as the primary wallet source;
+- keeps API runtime idle when no API key is configured;
 - shows an alarm / browser notification when wallet cash increases;
 - provides a shortcut to the Property Vault;
-- can autofill the Vault deposit field with the available wallet amount;
+- can autofill the deposit field from the current deposit-page wallet value;
 - supports Property Vault and Cayman deposit interfaces;
-- coordinates API polling between multiple tabs and includes its own API rate guard.
+- coordinates optional API polling between multiple tabs;
+- applies API rate guarding and bounded backoff on failures.
+
+The final **DEPOSIT** action remains manual in this Review build.
 
 ## Security / privacy
 
@@ -36,11 +41,11 @@ It:
 - Mobile browsers and Torn PDA are blocked before initialization.
 - Supported desktop userscript managers are Tampermonkey and Violentmonkey.
 
+## Project history and testing
+
+- [CHANGELOG.md](./CHANGELOG.md) — changes from the 0.9.x review builds through 1.0.0.
+- [TESTING.md](./TESTING.md) — regression checklist for DOM monitoring, multi-tab behavior, API fallback, alerts, navigation, and runtime guards.
+
 ## Review note
 
-This repository exists so Torn staff can inspect the exact source corresponding to the hash above. If code changes are requested, they will be published as a new version rather than silently replacing the reviewed build.
-
-
-## Version history
-
-See [CHANGELOG.md](./CHANGELOG.md) for changes between review builds.
+This repository exists so Torn staff can inspect the exact source corresponding to the hash above. Code changes are published as new versions rather than silently replacing a reviewed build.
