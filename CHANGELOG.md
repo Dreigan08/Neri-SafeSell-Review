@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.1] — 2026-11-08
+
+### Fixed
+- Property Vault capacity now uses Torn's fixed **$1,000,000,000** cap directly.
+- Remaining Property Vault capacity is calculated as `$1,000,000,000 - currently stored cash`.
+- Stored Vault cash can be read from the broader Property Vault page when Torn renders it outside the immediate deposit-form subtree.
+- Cayman no longer shares the Property Vault fixed-cap model and is shown as **No fixed cap**.
+- If Property Vault stored cash cannot be read, SafeSell will not guess a capacity or autofill an unsafe amount.
+- The capacity status card now shows the actual remaining amount when available.
+
 All notable changes to the SafeSell staff-review build are documented here.
 
 ## [1.0.0] — 2026-11-08
