@@ -4,13 +4,13 @@ This repository contains the **unobfuscated SafeSell userscript source submitted
 
 ## Build
 
-**Neri SafeSell v0.9.4 — Experimental Review**
+**Neri SafeSell v0.9.5 — Experimental Review**
 
-Source: [NeriSafeSell_v0.9.4_Experimental_Review.user.js](./NeriSafeSell_v0.9.4_Experimental_Review.user.js)
+Source: [NeriSafeSell_v0.9.5_Experimental_Review.user.js](./NeriSafeSell_v0.9.5_Experimental_Review.user.js)
 
 SHA-256 of the reviewed source:
 
-`616a3f7ee14e9f5b48f1a46baa21de7327f645525eb5fdd0e7eefa17e7e2462a`
+`cb1daafcba6ae1bc2498064c53a407b2f0c538584b81dedcf14522e2f63669e8`
 
 ## What SafeSell does
 
