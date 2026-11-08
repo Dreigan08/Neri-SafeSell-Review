@@ -413,7 +413,6 @@
 
     if (armed) {
       if (apiKey) ensureApi();
-      else stopApiMode();
       refreshModeLabel();
     }
     renderPanel();
@@ -1325,7 +1324,7 @@
     startDomMode({ freshArm });
 
     if (apiKey) ensureApi();
-    else stopApiMode();
+    else if (apiTimer || apiFetching || apiRequestHandle) stopApiMode();
 
     refreshModeLabel();
     renderPanel();
