@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.2] — 2026-11-08
+
+### Fixed
+- Added a single shared-state owner for wallet transitions, snapshots and alerts even when no API key is configured.
+- All Torn tabs may still observe the DOM, but only the confirmed owner may commit a wallet transition or emit an alarm.
+- Rearming SafeSell now starts a new wallet-deduplication cycle, preventing a legitimate repeated transition from being suppressed by a previous session.
+- Added request-generation and API-key-revision guards before API callbacks may mutate current state.
+- `stopApiMode()` now invalidates stale request callbacks before aborting an in-flight request.
+- API backoff, suspension, failure count and status are shared between tabs and tied to the current API-key revision.
+- A leadership handoff can no longer bypass a shared 429 cooldown or invalid-key suspension.
+- Reduced idle API work when no API key is configured; only shared state-owner coordination remains active.
+
+### Regression note
+A real multi-window DOM-only duplicate-alarm loop was observed on v0.9.7 when a scheduled company payment arrived. The exact historical state could not be captured, but the symptom was consistent with multiple tabs processing the same shared transition concurrently. v1.0.2 makes transition ownership single-writer to close that class of race.
+
 ## [1.0.1] — 2026-11-08
 
 ### Fixed
@@ -10,86 +25,38 @@
 - If Property Vault stored cash cannot be read, SafeSell will not guess a capacity or autofill an unsafe amount.
 - The capacity status card now shows the actual remaining amount when available.
 
-All notable changes to the SafeSell staff-review build are documented here.
-
 ## [1.0.0] — 2026-11-08
 
 ### Added
 - API error classification for authorization failures, rate limits, malformed responses, timeouts, and transient failures.
 - Bounded exponential API backoff and a longer cooldown for rate-limit responses.
 - API suspension for invalid or insufficient credentials until the stored key is changed.
-- Explicit Property Vault capacity states: **confirmed**, **estimated**, or **unknown**.
 - Compact source / API / baseline / Vault-capacity status cards in the deposit-page panel.
-- Collapsible diagnostics for technical state without crowding the normal interface.
-- A documented regression-test matrix in [TESTING.md](./TESTING.md).
+- Collapsible diagnostics and a regression-test document.
 
 ### Changed
 - Promoted the hardened DOM-first architecture to the first stable review release.
 - Foreground DOM remains the primary wallet source.
 - The Torn API remains optional backup infrastructure and is idle when no API key is configured.
-- API failures no longer cause unsafe wallet-state updates or uncontrolled retry loops.
-- The panel was cleaned up for release while preserving the existing SafeSell workflow.
 - The final **DEPOSIT** action remains manual in this Review build.
 
 ## [0.9.7] — 2026-11-08
-
-### Changed
-- Reworked SafeSell into a **DOM-first** architecture.
-- The DOM is authoritative while Torn is foregrounded and a usable wallet DOM source is available.
-- The Torn API became an optional fallback for background monitoring or cases where a usable foreground DOM wallet source is unavailable.
-- When no API key is configured, API polling, leader-election heartbeat, and API rate-bucket runtime activity remain disabled.
-- Removed the previous DOM/API reconciliation state because both sources no longer compete as simultaneous wallet authorities.
-- Kept Vault autofill tied to the current wallet value read from the active deposit page.
-
-### Why
-This removes unnecessary source races and keeps the normal no-API workflow as lightweight as possible.
+- Reworked SafeSell into a DOM-first architecture.
+- API became optional fallback infrastructure.
+- API polling and rate-bucket runtime activity remain disabled without an API key.
 
 ## [0.9.6] — 2026-11-08
-
-### Fixed
-- Vault autofill now prefers the current wallet value read directly from the deposit page instead of relying only on previously cached wallet state.
-- Manual deposit intent is no longer marked on `pointerdown`; it is marked only after an actual click on the deposit button.
-- Deposit-intent state now expires automatically if Torn does not produce the expected wallet decrease.
-- Improved stale DOM handling when API data is being used.
-- API requests from an old leader are discarded after leadership changes.
-- When supported by the userscript manager, an in-flight API request is aborted during leadership handoff.
-
-### Reliability
-- Reduced the chance of incorrect autofill amounts during rapid wallet changes.
-- Reduced the chance of unrelated wallet decreases being mistaken for a partial deposit.
+- Vault autofill began using the current deposit-page wallet value.
+- Manual deposit intent moved from pointerdown to an actual click and gained an expiry.
+- Improved request handoff and stale-source handling.
 
 ## [0.9.5] — 2026-11-08
-
-### Fixed
-- Disarming SafeSell now clears the canonical shared wallet snapshot together with the legacy scalar state.
-- Prevents an old `pendingDeposit`, `lastIncrease`, or baseline state from being restored by another tab after SafeSell is re-enabled.
+- Fixed stale shared wallet snapshots surviving SAFE OFF.
 
 ## [0.9.4] — 2026-11-08
-
-### Added
-- Introduced a canonical shared wallet snapshot containing wallet state, source metadata, deposit state, and wallet cycle.
-- Added last-active-tab API leadership: the most recently focused Torn tab becomes the preferred API leader.
-- Added a short leadership settle/verification period before API polling begins.
-- Added ownership verification before API requests and API-rate reservations.
-- Added request-token verification so stale leaders cannot apply old API responses.
-
-### Fixed
-- Prevented stale multi-tab state from overwriting a newer shared wallet snapshot.
-- Reduced duplicate API polling caused by simultaneous leader claims.
-- Improved shared API-rate coordination between tabs.
+- Added canonical shared wallet snapshots.
+- Added last-active-tab leadership, settle verification and verified API-rate reservations.
 
 ## [0.9.3] — 2026-11-08
-
-### Review baseline
-- First SafeSell build published in this repository for Torn staff review.
-- Deposit navigation and autofill are available while the final **DEPOSIT** action remains manual.
-- Property Vault and Cayman deposit interfaces are supported.
-- Wallet increases can be detected through Torn's loaded DOM.
-- Optional Torn `user/money` API monitoring is available.
-- No analytics, telemetry, or third-party servers are used.
-- Desktop-only runtime guards block mobile/PDA execution.
-- Tampermonkey and Violentmonkey are the supported userscript managers.
-
----
-
-Older internal SafeSell development builds predate this review repository and are intentionally not reconstructed here.
+- First staff-review baseline.
+- Navigation/autofill available; final **DEPOSIT** remains manual.
