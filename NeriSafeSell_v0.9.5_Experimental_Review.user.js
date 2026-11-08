@@ -25,7 +25,6 @@
    * - No third-party servers. Network requests are limited to api.torn.com.
    * - Use a CUSTOM Torn API key limited to user/money. Never use a Full Access key.
    * - The API key is stored by the userscript manager via GM storage.
-   * - Source is intentionally unobfuscated for review.
    * - Desktop-only release: mobile browsers and Torn PDA exit before initialization.
    */
 
