@@ -4,13 +4,13 @@ This repository contains the **SafeSell userscript source submitted for Torn sta
 
 ## Current build
 
-**Neri SafeSell v1.0.6 — Review**
+**Neri SafeSell v1.0.7 — Review**
 
-Source: [NeriSafeSell_v1.0.6_Review.user.js](./NeriSafeSell_v1.0.6_Review.user.js)
+Source: [NeriSafeSell_v1.0.7_Review.user.js](./NeriSafeSell_v1.0.7_Review.user.js)
 
 SHA-256 of the current reviewed source:
 
-`46ec59bd73e02ab78624b4d1e5de51bfeee549a6ff2342e8ae59e678ffc89875`
+`5045cd96318df44280f85df947e824d402cbf8eaa8f63b018f06d0323b0f4c09`
 
 ## What SafeSell does
 
