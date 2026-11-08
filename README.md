@@ -10,7 +10,7 @@ Source: [NeriSafeSell_v0.9.5_Experimental_Review.user.js](./NeriSafeSell_v0.9.5_
 
 SHA-256 of the reviewed source:
 
-`cb1daafcba6ae1bc2498064c53a407b2f0c538584b81dedcf14522e2f63669e8`
+`ccb4c5d5cc1e8fb546aeeff5568e75f18baae913087b0b614cc0cf6449aae46f`
 
 ## What SafeSell does
 
