@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.0.5] — 2026-11-08
+
+### Changed
+- Reworked multi-tab ownership so correctness no longer depends on a precise 2-second background heartbeat.
+- Ownership transfers immediately on focus, visibility, pageshow, and resume events.
+- Heartbeat is now 30 seconds with a 180-second crash-recovery lease; delayed background timers no longer look like a dead tab.
+- A delayed current owner renews its existing token instead of creating a false handoff.
+- Added freeze/resume/pagehide lifecycle handling.
+- Reduced global MutationObservers from four to three by merging source-reconnect duties into the UI bootstrap observer.
+- The global structural observer now ignores unrelated Torn DOM churn and wakes heavier work only for relevant missing sources/mount points.
+- Reduced identical snapshot writes, cached travel fallback scans, cached Notes-anchor searches, coalesced scroll/UI refreshes, and avoided rebuilding unchanged quick-button/corner-switch markup.
+- Legacy storage compatibility now runs once through a schema migration instead of on every load.
+- Removed unused local API-call bookkeeping while keeping the shared API rate guard.
+- Final **DEPOSIT** remains manual in the Review build.
+
+### Development note
+- Private 1.0.3/1.0.4 experiments tested a Web Worker clock and performance cleanup. The Worker clock was not promoted to the Review branch; the useful cleanup was retained in 1.0.5.
+
 ## [1.0.2] — 2026-11-08
 
 ### Fixed
