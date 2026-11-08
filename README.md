@@ -39,3 +39,8 @@ It:
 ## Review note
 
 This repository exists so Torn staff can inspect the exact source corresponding to the hash above. If code changes are requested, they will be published as a new version rather than silently replacing the reviewed build.
+
+
+## Version history
+
+See [CHANGELOG.md](./CHANGELOG.md) for changes between review builds.
