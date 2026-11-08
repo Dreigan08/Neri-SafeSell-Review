@@ -136,6 +136,7 @@
     maxOwnApiCallsPerMinute: 45,
     leaderHeartbeatMs: 2000,
     leaderStaleMs: 6500,
+    leaderSettleMs: 120,
     foregroundApiBackupMs: 5000,
     staleDomMs: 4000
   };
@@ -190,15 +191,22 @@
   // Navigation and autofill remain available, but DEPOSIT always requires a user click.
 
   // --- Multi-tab coordination (local only; does not contact Torn servers) ---
+  // The most recently focused Torn tab is the preferred API leader. Leadership uses a
+  // short lease-settle step: a tab writes a unique token, waits briefly, then re-reads
+  // the shared record before it is allowed to poll. This prevents simultaneous tabs from
+  // both assuming they won the same election.
   const TAB_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const LEADER_KEY = STORAGE.multiTabLeader;
   const RATE_KEY = STORAGE.sharedApiRateBucket;
   const ALERT_KEY = STORAGE.sharedLastAlert;
   const CYCLE_KEY = STORAGE.walletCycle;
+  const SNAPSHOT_KEY = STORAGE.walletSnapshot;
   let leaderTimer = null;
+  let leaderConfirmTimer = null;
+  let leaderClaimSeq = 0;
+  let leaderToken = '';
+  let rateReservationSeq = 0;
   let isLeader = false;
-  let lastFocusAt = document.hasFocus() ? Date.now() : 0;
-  let leaderVerifyTimer = null;
 
   function readJsonValue(key, fallback) {
     try {
@@ -214,100 +222,192 @@
     try { GM_setValue(key, JSON.stringify(value)); } catch (_) {}
   }
 
+  function normalizeWalletSnapshot(value) {
+    if (!value || typeof value !== 'object') return null;
+    const wallet = Number(value.wallet);
+    const observedAt = Number(value.observedAt || 0);
+    if (!Number.isFinite(wallet) || wallet < 0 || !Number.isFinite(observedAt) || observedAt < 0) return null;
+    return {
+      wallet: Math.floor(wallet),
+      source: ['api', 'dom', 'none'].includes(value.source) ? value.source : 'none',
+      observedAt,
+      apiAt: Math.max(0, Number(value.apiAt || 0) || 0),
+      domAt: Math.max(0, Number(value.domAt || 0) || 0),
+      hasBaseline: Boolean(value.hasBaseline),
+      pendingDeposit: Boolean(value.pendingDeposit),
+      lastIncrease: Math.max(0, Math.floor(Number(value.lastIncrease || 0) || 0)),
+      cycle: Math.max(0, Math.floor(Number(value.cycle || 0) || 0)),
+      tab: String(value.tab || '')
+    };
+  }
+
+  function currentWalletSnapshot() {
+    return normalizeWalletSnapshot(readJsonValue(SNAPSHOT_KEY, null));
+  }
+
+  function applyWalletSnapshot(value, { force = false } = {}) {
+    const snapshot = normalizeWalletSnapshot(value);
+    if (!snapshot) return false;
+    if (!force && snapshot.observedAt < lastObservedAt) return false;
+
+    lastWallet = snapshot.wallet;
+    latestWallet = snapshot.wallet;
+    lastSource = snapshot.source;
+    lastObservedAt = snapshot.observedAt;
+    lastApiAt = snapshot.apiAt;
+    lastDomChangeAt = snapshot.domAt;
+    hasBaseline = snapshot.hasBaseline;
+    pendingDeposit = snapshot.pendingDeposit;
+    lastIncrease = snapshot.lastIncrease;
+    walletCycle = Math.max(walletCycle, snapshot.cycle);
+    return true;
+  }
+
+  function writeWalletSnapshot() {
+    if (!lastObservedAt) lastObservedAt = Date.now();
+    writeJsonValue(SNAPSHOT_KEY, {
+      wallet: Math.max(0, Math.floor(Number(lastWallet || 0))),
+      source: lastSource,
+      observedAt: lastObservedAt,
+      apiAt: lastApiAt,
+      domAt: lastDomChangeAt,
+      hasBaseline: Boolean(hasBaseline),
+      pendingDeposit: Boolean(pendingDeposit),
+      lastIncrease: Math.max(0, Math.floor(Number(lastIncrease || 0))),
+      cycle: Math.max(0, Math.floor(Number(walletCycle || 0))),
+      tab: TAB_ID
+    });
+  }
+
+  applyWalletSnapshot(currentWalletSnapshot(), { force: true });
+
   function currentLeader() {
     return readJsonValue(LEADER_KEY, null);
   }
 
-  // The most recently focused Torn window wins. Hidden windows remain fallbacks.
-  // Claims are verified after a short delay before any API request is allowed.
-  function leaderPriority() {
-    return document.hasFocus() && document.visibilityState === 'visible' ? 2
-      : document.visibilityState === 'visible' ? 1 : 0;
+  function leaderIsFresh(leader, now = Date.now()) {
+    return Boolean(leader?.id && leader?.token
+      && (now - Number(leader.heartbeat || 0)) <= CFG.leaderStaleMs);
+  }
+
+  function ownsLeadership() {
+    const leader = currentLeader();
+    return leaderIsFresh(leader)
+      && leader.id === TAB_ID
+      && leader.token === leaderToken;
+  }
+
+  function settleLeadership(token) {
+    if (leaderConfirmTimer) clearTimeout(leaderConfirmTimer);
+    leaderConfirmTimer = setTimeout(() => {
+      leaderConfirmTimer = null;
+      if (!armed || token !== leaderToken) return;
+
+      isLeader = ownsLeadership();
+      if (!isLeader) stopApiMode();
+      if (armed) { ensureApi(); refreshModeLabel(); }
+      renderPanel();
+    }, CFG.leaderSettleMs);
+  }
+
+  function claimLeadership(reason = 'stale') {
+    if (!armed) return false;
+    const now = Date.now();
+    const token = `${TAB_ID}:${now.toString(36)}:${(++leaderClaimSeq).toString(36)}`;
+    leaderToken = token;
+    isLeader = false;
+    stopApiMode();
+    writeJsonValue(LEADER_KEY, {
+      id: TAB_ID,
+      token,
+      heartbeat: now,
+      activeAt: now,
+      reason
+    });
+    settleLeadership(token);
+    return true;
   }
 
   function heartbeatLeader() {
-    if (!armed) return;
     const now = Date.now();
     const leader = currentLeader();
-    const stale = !leader?.id || now - Number(leader.heartbeat || 0) > CFG.leaderStaleMs;
-    const priority = leaderPriority();
-    const better = priority > Number(leader?.priority ?? -1)
-      || (priority === Number(leader?.priority ?? -1)
-        && lastFocusAt > Number(leader?.focusAt || 0));
-    if (leader?.id === TAB_ID) {
-      writeJsonValue(LEADER_KEY, { id: TAB_ID, heartbeat: now, priority, focusAt: lastFocusAt });
+    const stale = !leaderIsFresh(leader, now);
+
+    if (leader?.id === TAB_ID && leader?.token === leaderToken && !stale) {
+      writeJsonValue(LEADER_KEY, { ...leader, heartbeat: now });
       isLeader = true;
-    } else if (stale || better) {
-      isLeader = false;
-      stopApiMode();
-      writeJsonValue(LEADER_KEY, { id: TAB_ID, heartbeat: now, priority, focusAt: lastFocusAt });
-      if (leaderVerifyTimer) clearTimeout(leaderVerifyTimer);
-      leaderVerifyTimer = setTimeout(() => {
-        leaderVerifyTimer = null;
-        const current = currentLeader();
-        isLeader = Boolean(armed && current?.id === TAB_ID
-          && Date.now() - Number(current.heartbeat || 0) <= CFG.leaderStaleMs);
-        ensureApi();
-        refreshModeLabel();
-        renderPanel();
-      }, 350);
+    } else if (stale) {
+      claimLeadership(isForeground() ? 'active' : 'stale');
+      return;
     } else {
+      if (isLeader) stopApiMode();
       isLeader = false;
     }
-    if (!isLeader) stopApiMode();
-    else ensureApi();
-    refreshModeLabel();
+
+    if (armed) { ensureApi(); refreshModeLabel(); }
     renderPanel();
   }
 
   function startLeaderCoordination() {
     if (!leaderTimer) leaderTimer = setInterval(heartbeatLeader, CFG.leaderHeartbeatMs);
-    heartbeatLeader();
+    if (isForeground()) claimLeadership('active');
+    else heartbeatLeader();
   }
 
   function stopLeaderCoordination() {
     if (leaderTimer) clearInterval(leaderTimer);
-    if (leaderVerifyTimer) clearTimeout(leaderVerifyTimer);
-    leaderVerifyTimer = null;
+    if (leaderConfirmTimer) clearTimeout(leaderConfirmTimer);
     leaderTimer = null;
+    leaderConfirmTimer = null;
     const leader = currentLeader();
-    if (leader?.id === TAB_ID) GM_deleteValue(LEADER_KEY);
+    if (leader?.id === TAB_ID && leader?.token === leaderToken) GM_deleteValue(LEADER_KEY);
+    leaderToken = '';
     isLeader = false;
     stopApiMode();
   }
 
-  // Only the verified leader reserves requests. This is a best-effort local cap;
-  // GM storage is not transactional, so it is not an absolute global API quota.
+  function normalizeRateBucket(value, now = Date.now()) {
+    if (!Array.isArray(value)) return [];
+    return value.map((entry, index) => {
+      if (Number.isFinite(Number(entry))) {
+        const at = Number(entry);
+        return { at, token: `legacy:${at}:${index}`, tab: 'legacy' };
+      }
+      if (!entry || typeof entry !== 'object') return null;
+      const at = Number(entry.at);
+      if (!Number.isFinite(at)) return null;
+      return {
+        at,
+        token: String(entry.token || `legacy:${at}:${index}`),
+        tab: String(entry.tab || '')
+      };
+    }).filter(entry => entry && now - entry.at < CFG.apiWindowMs);
+  }
+
   function sharedApiCountAndReserve() {
-    if (!isLeader || currentLeader()?.id !== TAB_ID) return { allowed: false, count: sharedApiCount() };
     const now = Date.now();
-    let bucket = readJsonValue(RATE_KEY, []);
-    if (!Array.isArray(bucket)) bucket = [];
-    bucket = bucket.map(Number).filter(t => Number.isFinite(t) && now - t < CFG.apiWindowMs);
-    if (bucket.length >= CFG.maxOwnApiCallsPerMinute) return { allowed: false, count: bucket.length };
-    bucket.push(now);
+    if (!ownsLeadership()) return { allowed: false, count: sharedApiCount(), reason: 'not-leader' };
+
+    let bucket = normalizeRateBucket(readJsonValue(RATE_KEY, []), now);
+    if (bucket.length >= CFG.maxOwnApiCallsPerMinute) {
+      writeJsonValue(RATE_KEY, bucket);
+      return { allowed: false, count: bucket.length, reason: 'limit' };
+    }
+
+    const token = `${TAB_ID}:${now.toString(36)}:r${(++rateReservationSeq).toString(36)}`;
+    bucket.push({ at: now, token, tab: TAB_ID });
     writeJsonValue(RATE_KEY, bucket);
-    return { allowed: true, count: bucket.length };
+
+    const verified = normalizeRateBucket(readJsonValue(RATE_KEY, []), Date.now());
+    const reserved = verified.some(entry => entry.token === token);
+    if (!reserved || !ownsLeadership()) {
+      return { allowed: false, count: verified.length, reason: 'lost-leadership' };
+    }
+    return { allowed: true, count: verified.length, token };
   }
 
   function sharedApiCount() {
-    const now = Date.now();
-    let bucket = readJsonValue(RATE_KEY, []);
-    if (!Array.isArray(bucket)) return 0;
-    return bucket.map(Number).filter(t => Number.isFinite(t) && now - t < CFG.apiWindowMs).length;
-  }
-
-  // Keep value, source and observation time together across all tabs.
-  function applySharedSnapshot(snapshot) {
-    if (!snapshot || !Number.isFinite(Number(snapshot.wallet))) return;
-    const observedAt = Number(snapshot.observedAt || 0);
-    if (observedAt < lastObservedAt) return;
-    lastObservedAt = observedAt;
-    lastWallet = Math.max(0, Math.floor(Number(snapshot.wallet)));
-    latestWallet = lastWallet;
-    lastSource = snapshot.source === 'api' ? 'api' : 'dom';
-    if (lastSource === 'api') lastApiAt = observedAt;
-    else lastDomChangeAt = observedAt;
+    return normalizeRateBucket(readJsonValue(RATE_KEY, []), Date.now()).length;
   }
 
   function currentWalletCycle() {
@@ -353,11 +453,9 @@
   const nextTick = fn => (document.visibilityState === 'visible' ? requestAnimationFrame(fn) : setTimeout(fn, 30));
 
   function saveState() {
-    const observedAt = lastObservedAt || Date.now();
-    writeJsonValue(STORAGE.walletSnapshot, {
-      wallet: Math.max(0, Math.floor(Number(lastWallet || 0))),
-      source: lastSource, observedAt, tab: TAB_ID
-    });
+    // The snapshot is the canonical multi-tab wallet state. Legacy scalar keys remain
+    // for compatibility/UI, but source + timing metadata move together atomically.
+    writeWalletSnapshot();
     GM_setValue(STORAGE.lastWallet, Math.max(0, Math.floor(Number(lastWallet || 0))));
     GM_setValue(STORAGE.hasBaseline, Boolean(hasBaseline));
     GM_setValue(STORAGE.pendingDeposit, Boolean(pendingDeposit));
@@ -617,11 +715,11 @@
     btn.style.boxShadow = '';
   }
 
-  function processWallet(wallet, source, { baseline = false } = {}) {
-    // Prefer the atomic wallet/source/timestamp snapshot to separate legacy values.
-    const sharedSnapshot = readJsonValue(STORAGE.walletSnapshot, null);
-    if (sharedSnapshot) applySharedSnapshot(sharedSnapshot);
-    else {
+  function processWallet(wallet, source, { baseline = false, observedAt = Date.now() } = {}) {
+    const sharedSnapshot = currentWalletSnapshot();
+    if (sharedSnapshot) {
+      applyWalletSnapshot(sharedSnapshot);
+    } else {
       const sharedLast = Number(GM_getValue(STORAGE.lastWallet, lastWallet) || 0);
       if (Number.isFinite(sharedLast) && sharedLast >= 0) lastWallet = sharedLast;
     }
@@ -631,25 +729,21 @@
     wallet = Number(wallet);
     if (!Number.isFinite(wallet) || wallet < 0) return;
     wallet = Math.floor(wallet);
+    observedAt = Number(observedAt);
+    if (!Number.isFinite(observedAt) || observedAt <= 0) observedAt = Date.now();
 
-    // With DOM and API running in parallel, a stale DOM render may show less cash than a
-    // newly received API reading. Do not treat that as a real spend/deposit (it self-corrects
-    // on the next poll). If the user pressed DEPOSIT (awaitingDeposit), the decrease is real.
-    const nowTs = Date.now();
     if (source === 'dom' && !baseline && hasBaseline && !awaitingDeposit
-        && lastSource === 'api' && wallet < lastWallet
-        && nowTs - lastApiAt < CFG.staleDomMs) return;
-    // An older observation must never replace a newer cross-tab observation.
-    if (!baseline && lastObservedAt > nowTs) return;
-    if (source === 'api') lastApiAt = nowTs;
-    else if (wallet !== lastWallet) lastDomChangeAt = nowTs;
-    lastObservedAt = nowTs;
+        && lastSource === 'api' && wallet < lastWallet && observedAt - lastApiAt < CFG.staleDomMs) return;
+
+    if (source === 'api') lastApiAt = Math.max(lastApiAt, observedAt);
+    else if (wallet !== lastWallet) lastDomChangeAt = Math.max(lastDomChangeAt, observedAt);
 
     if (baseline || !hasBaseline) {
       lastWallet = wallet;
       latestWallet = wallet;
       hasBaseline = true;
       lastSource = source;
+      lastObservedAt = observedAt;
       saveState();
       renderPanel();
       return;
@@ -657,10 +751,22 @@
 
     const previous = lastWallet;
     const delta = wallet - previous;
-
     latestWallet = wallet;
+
+    if (delta === 0) {
+      if (source === 'api') {
+        lastSource = 'api';
+        lastObservedAt = observedAt;
+        writeWalletSnapshot();
+      }
+      if (pendingDeposit) fillDeposit();
+      renderPanel();
+      return;
+    }
+
     lastWallet = wallet;
     lastSource = source;
+    lastObservedAt = observedAt;
 
     if (delta >= CFG.minIncrease) {
       pendingDeposit = true;
@@ -674,12 +780,8 @@
     }
 
     if (delta < 0) {
-      // Any wallet decrease closes the previous cycle. This prevents
-      // a new sale that reaches the same final balance from being suppressed by dedupe.
       bumpWalletCycle();
-
       if (wallet <= 1) {
-        // Empty wallet = nothing remains exposed (button/Enter deposit or spending).
         pendingDeposit = false;
         awaitingDeposit = false;
         lastIncrease = 0;
@@ -688,25 +790,35 @@
         pendingDeposit = true;
         awaitingDeposit = false;
       }
-
       saveState();
       if (pendingDeposit) fillDeposit();
       renderPanel();
       return;
     }
 
-    if (pendingDeposit) fillDeposit();   // no state change: do not write storage
+    if (pendingDeposit) fillDeposit();
     renderPanel();
   }
 
   function requestWallet({ baseline = false } = {}) {
-    if (!armed || apiFetching || !apiKey || !isLeader || currentLeader()?.id !== TAB_ID) return;
-    const rate = sharedApiCountAndReserve();
-    if (!rate.allowed) {
-      lastError = `API guardrail: ${rate.count}/${CFG.maxOwnApiCallsPerMinute} calls in 60 s`;
-      renderPanel();
+    if (!armed || apiFetching || !apiKey || !isLeader || !ownsLeadership()) {
+      if (isLeader && !ownsLeadership()) {
+        isLeader = false;
+        stopApiMode();
+      }
       return;
     }
+
+    const rate = sharedApiCountAndReserve();
+    if (!rate.allowed) {
+      if (rate.reason === 'limit') {
+        lastError = `API guardrail: ${rate.count}/${CFG.maxOwnApiCallsPerMinute} calls in 60 s`;
+        renderPanel();
+      }
+      return;
+    }
+
+    if (!ownsLeadership()) return;
     apiFetching = true;
     noteApiCall();
 
@@ -727,12 +839,16 @@
             renderPanel();
             return;
           }
-
           const wallet = Number(json?.money?.wallet ?? json?.wallet);
           if (!Number.isFinite(wallet)) throw new Error('invalid wallet value');
           lastError = '';
-          if (!isLeader || currentLeader()?.id !== TAB_ID || ts < lastDomChangeAt) return;   // request started before a newer DOM change
-          processWallet(wallet, 'api', { baseline });
+
+          if (!ownsLeadership()) return;
+          const sharedSnapshot = currentWalletSnapshot();
+          if (ts < lastDomChangeAt) return;
+          if (sharedSnapshot && ts < sharedSnapshot.observedAt) return;
+
+          processWallet(wallet, 'api', { baseline, observedAt: Date.now() });
         } catch (e) {
           lastError = String(e.message || e);
           renderPanel();
@@ -1485,7 +1601,7 @@
         </div>
 
         <div style="margin-top:6px;font-size:11px;color:#777">
-          Sources in parallel: DOM monitor${apiKey ? ` + API every ${((isForeground() ? CFG.foregroundApiBackupMs : CFG.backgroundPollMs)/1000).toFixed(1)} s · ${isLeader ? 'this tab is leader' : 'another tab is leader'}` : ' · no API (0 requests)'}.<br>
+          Sources in parallel: DOM monitor${apiKey ? ` + API every ${((isForeground() ? CFG.foregroundApiBackupMs : CFG.backgroundPollMs)/1000).toFixed(1)} s · ${isLeader ? 'this tab is leader (last active)' : 'another tab is leader'}` : ' · no API (0 requests)'}.<br>
           Review behavior: <b>DOM monitoring remains active while Torn is in the background.</b><br>
           Alerts: <b>0 s cooldown</b>; only the same exact transition within the same cycle is deduplicated.<br>
           Baseline: ${hasBaseline ? 'established (includes $0)' : 'pending'}.<br>
@@ -1531,14 +1647,15 @@
       return;
     }
     primeAudio();
-    lastFocusAt = Date.now();
-    heartbeatLeader();
+    claimLeadership('focus');
     chooseMode();
     if (pendingDeposit) fillDeposit();
   });
 
   window.addEventListener('blur', () => {
-    if (armed) { heartbeatLeader(); chooseMode(); }
+    // Keep the last-used Torn tab as leader while the user is in another application.
+    // A different Torn tab takes over when it receives focus.
+    if (armed) chooseMode();
   });
 
   document.addEventListener('visibilitychange', () => {
@@ -1546,7 +1663,7 @@
       renderPanel();
       return;
     }
-    heartbeatLeader();
+    if (document.visibilityState === 'visible' && document.hasFocus()) claimLeadership('visible');
     chooseMode();
   });
 
@@ -1590,15 +1707,19 @@
       if (armed) startLeaderCoordination(); else stopLeaderCoordination();
       chooseMode();
     });
-    GM_addValueChangeListener(STORAGE.walletSnapshot, (_k, _old, val, remote) => {
+    GM_addValueChangeListener(SNAPSHOT_KEY, (_k, _old, val, remote) => {
       if (!remote) return;
-      try { applySharedSnapshot(typeof val === 'string' ? JSON.parse(val) : val); } catch (_) {}
-      renderPanel();
+      const snapshot = typeof val === 'string' ? (() => { try { return JSON.parse(val); } catch (_) { return null; } })() : val;
+      if (applyWalletSnapshot(snapshot)) {
+        if (pendingDeposit) fillDeposit();
+        renderPanel();
+      }
     });
     GM_addValueChangeListener(STORAGE.lastWallet, (_k, _old, val, remote) => {
       if (!remote) return;
+      if (currentWalletSnapshot()) return;
       const n = Number(val);
-      if (Number.isFinite(n) && !readJsonValue(STORAGE.walletSnapshot, null)) { lastWallet = n; latestWallet = n; }
+      if (Number.isFinite(n)) { lastWallet = n; latestWallet = n; }
       renderPanel();
     });
     GM_addValueChangeListener(STORAGE.hasBaseline, (_k, _old, val, remote) => {
@@ -1628,8 +1749,7 @@
   } catch (_) {}
 
   window.addEventListener('beforeunload', () => {
-    const leader = currentLeader();
-    if (leader?.id === TAB_ID) GM_deleteValue(LEADER_KEY);
+    if (ownsLeadership()) GM_deleteValue(LEADER_KEY);
   });
 
   // Bootstrap observer waits for asynchronously mounted Torn UI without polling or requests.
