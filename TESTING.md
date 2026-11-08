@@ -76,3 +76,18 @@ This checklist documents the main behaviors that should remain stable across rel
 - Generate unrelated Torn DOM churn and verify it does not repeatedly rebuild SafeSell UI.
 - Confirm unchanged quick-button and SAFE-switch states do not rewrite their markup.
 - Confirm identical wallet reads do not rewrite the shared snapshot more often than the intended refresh window.
+
+
+## Adaptive alarm volume
+- Wallet below $100,000: visual notification appears, alarm sound remains silent.
+- Wallet at $100,000: alarm is audible at very low volume.
+- Test intermediate exposure values such as $250k, $500k and $750k; volume should rise progressively.
+- Wallet at or above $1,000,000: alarm uses the original full volume.
+- The Test alarm button remains full-volume regardless of the current wallet.
+
+## Deposit-page render latency
+- Navigate into Property Vault and Cayman from another Torn page.
+- If the DEPOSIT button/input already exists, SafeSell should acquire the form through the fast path without waiting for the expensive text scan.
+- During Torn's initial rendering window, the waiting panel should re-check approximately every 80 ms.
+- After 2.5 seconds of unresolved rendering, checks may slow to approximately 250 ms.
+- Confirm the transient probe stops once the deposit context is found or after leaving the deposit route.
